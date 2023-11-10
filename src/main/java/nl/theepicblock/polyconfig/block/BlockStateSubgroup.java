@@ -12,7 +12,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.Identifier;
 import nl.theepicblock.polyconfig.PolyConfig;
-import nl.theepicblock.polyconfig.Utils;
+import nl.theepicblock.polyconfig.util.Utils;
 
 import java.util.ArrayList;
 import java.util.List;

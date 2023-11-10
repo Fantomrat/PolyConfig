@@ -5,7 +5,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-import nl.theepicblock.polyconfig.Utils;
+import nl.theepicblock.polyconfig.util.Utils;
 import nl.theepicblock.polyconfig.block.ConfigFormatException;
 
 import java.util.Map;

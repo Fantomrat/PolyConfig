@@ -6,13 +6,23 @@ import dev.hbeck.kdl.parse.KDLParser;
 import io.github.theepicblock.polymc.api.PolyMcEntrypoint;
 import io.github.theepicblock.polymc.api.PolyRegistry;
 import io.github.theepicblock.polymc.api.block.BlockStateManager;
+import io.github.theepicblock.polymc.api.item.ItemLocation;
+import io.github.theepicblock.polymc.api.item.ItemPoly;
+import io.github.theepicblock.polymc.api.resource.ModdedResources;
+import io.github.theepicblock.polymc.api.resource.PolyMcResourcePack;
+import io.github.theepicblock.polymc.impl.misc.logging.SimpleLogger;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import nl.theepicblock.polyconfig.block.BlockNodeParser;
 import nl.theepicblock.polyconfig.block.ConfigFormatException;
 import nl.theepicblock.polyconfig.block.CustomBlockPoly;
 import nl.theepicblock.polyconfig.entity.CustomEntityWizard;
 import nl.theepicblock.polyconfig.entity.EntityNodeParser;
+import nl.theepicblock.polyconfig.item.ItemPolyEntry;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +34,7 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class PolyConfig implements PolyMcEntrypoint {
 	private static final int CURRENT_VERSION = 1;
@@ -32,12 +43,12 @@ public class PolyConfig implements PolyMcEntrypoint {
 	/**
 	 * A temporary record that holds the parsed nodes before they're applied
 	 */
-	public record Declarations(Map<Identifier, BlockNodeParser.BlockEntry> blockDeclarations, Map<Identifier, EntityNodeParser.EntityEntry> entityDeclarations) {}
+	public record Declarations(Map<Identifier, ItemPolyEntry> itemDeclarations, Map<Identifier, BlockNodeParser.BlockEntry> blockDeclarations, Map<Identifier, EntityNodeParser.EntityEntry> entityDeclarations) {}
 
 	@Override
 	public void registerPolys(PolyRegistry registry) {
 		var parser = new KDLParser();
-		var declarations = new Declarations(new LinkedHashMap<>(), new LinkedHashMap<>());
+		var declarations = new Declarations(new HashMap<>(), new HashMap<>(), new HashMap<>());
 		var configdir = FabricLoader.getInstance().getConfigDir();
 
 		var oldLocation = configdir.resolve("polyconfig.kdl").toFile();
@@ -82,6 +93,32 @@ public class PolyConfig implements PolyMcEntrypoint {
 		declarations.entityDeclarations().forEach((identifier, entityEntry) -> {
 			registry.registerEntityPoly(entityEntry.moddedEntity(), (info, entity) -> new CustomEntityWizard<>(info, entity, entityEntry.vanillaReplacement(), entityEntry.name()));
 		});
+
+		// Apply item nodes
+		declarations.itemDeclarations().forEach((identifier, itemEntry) -> {
+			var poly = itemEntry.getPolyProvider().create(registry, itemEntry.getModded());
+
+			if (itemEntry.getStackModifiers().isEmpty()) {
+				registry.registerItemPoly(itemEntry.getModded(), poly);
+				return;
+			}
+
+			registry.registerItemPoly(itemEntry.getModded(), new ItemPoly() {
+				@Override
+				public ItemStack getClientItem(ItemStack input, @Nullable ServerPlayerEntity player, @Nullable ItemLocation location) {
+					ItemStack stack = poly.getClientItem(input, player, location);
+					for (Consumer<ItemStack> modifier : itemEntry.getStackModifiers()) {
+						modifier.accept(stack);
+					}
+					return stack;
+				}
+
+				@Override
+				public void addToResourcePack(Item item, ModdedResources moddedResources, PolyMcResourcePack pack, SimpleLogger logger) {
+					poly.addToResourcePack(item, moddedResources, pack, logger);
+				}
+			});
+		});
 	}
 
 	private static void handleFile(File configFile, KDLParser parser, Declarations declarations) {
@@ -105,7 +142,7 @@ public class PolyConfig implements PolyMcEntrypoint {
 					switch (node.getIdentifier()) {
 						case "version" -> {}
 						case "block" -> BlockNodeParser.parseBlockNode(node, declarations.blockDeclarations);
-						case "item" -> handleItemNode(node);
+						case "item" -> ItemPolyEntry.PARSER.parseNode(node, declarations.itemDeclarations);
 						case "entity" -> EntityNodeParser.parseEntityNode(node, declarations.entityDeclarations);
 						default -> throw unknownNode(node);
 					}

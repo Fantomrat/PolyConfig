@@ -6,7 +6,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.IntProperty;
 import net.minecraft.state.property.Property;
-import nl.theepicblock.polyconfig.Utils;
+import nl.theepicblock.polyconfig.util.Utils;
 
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
